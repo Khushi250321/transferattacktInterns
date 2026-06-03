@@ -1,0 +1,44 @@
+python --version
+pip show tensorflow
+git --version
+py -3.11 --version
+py -3.11 -m venv C:\internenv
+C:\internenv\Scripts\activate
+pip install tensorflow==2.13.0 deepface opencv-python pillow pandas numpy
+cd C:\
+git clone https://github.com/Khushi250321/transferattacktInterns.git
+cd transferattacktInterns
+dir
+cd C:\transferattacktInterns
+tar -xf dataset_extractedfaces.zip
+cd C:\transferattacktInterns
+tar -xf dataset_extractedfaces.zip
+dir
+dir scripts
+notepad core\transfer_attack_core.py
+python scripts\build_subset_baselines.py --dataset_root C:\transferattacktInterns\dataset_extractedfaces --input_csv docs\subset_input_pairs.csv --threshold_file thresholds.json --attacks ATT --output_dir results_att
+python scripts\build_subset_baselines.py --help
+python scripts\build_subset_baselines.py --raw-long-csv results_baseline\subset_raw_similarities_long.csv --input-csv docs\subset_input_pairs.csv --thresholds-json thresholds.json --output-dir results_att
+notepad scripts\build_subset_baselines.py
+python scripts\build_subset_baselines.py --raw-long-csv results_baseline\subset_raw_similarities_long.csv --input-csv docs\subset_input_pairs.csv --thresholds-json thresholds.json --output-dir results_att
+notepad scripts\build_subset_baselines.py
+python scripts\build_subset_baselines.py --raw-long-csv results_baseline\subset_raw_similarities_long.csv --input-csv docs\subset_input_pairs.csv --thresholds-json thresholds.json --output-dir results_att
+python -c "import pandas as pd; df=pd.read_csv('results_baseline/subset_raw_similarities_long.csv'); print(df.columns.tolist())"
+notepad scripts\build_subset_baselines.py
+python scripts\build_subset_baselines.py --raw-long-csv results_baseline\subset_raw_similarities_long.csv --input-csv docs\subset_input_pairs.csv --thresholds-json thresholds.json --output-dir results_att
+python -c "
+content = open('scripts/build_subset_baselines.py').read()
+content = content.replace(\"subset['row_id'].tolist()\", \"list(subset['row_id'])\")
+content = content.replace(\"subset['row_id'].values.tolist()\", \"list(subset['row_id'])\")
+open('scripts/build_subset_baselines.py', 'w').write(content)
+print('Fixed!')
+"
+python scripts\build_subset_baselines.py --raw-long-csv results_baseline\subset_raw_similarities_long.csv --input-csv docs\subset_input_pairs.csv --thresholds-json thresholds.json --output-dir results_att
+notepad scripts\build_subset_baselines.py
+python scripts\build_subset_baselines.py --raw-long-csv results_baseline\subset_raw_similarities_long.csv --input-csv docs\subset_input_pairs.csv --thresholds-json thresholds.json --output-dir results_att
+type scripts\build_subset_baselines.py
+python -c "import pandas as pd; df=pd.read_csv('results_baseline/subset_raw_similarities_long.csv'); print(df['attack_method'].unique())"
+notepad run_att.py
+python run_att.py
+python -c "import pandas as pd; df=pd.read_csv('results_baseline/subset_attack_summary_by_goal.csv'); print(df.to_string())"
+doskey /history > session_log.txt

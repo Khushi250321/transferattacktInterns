@@ -1,0 +1,31 @@
+row_id,row_id,img1,img2,dataset,attack_type
+0,0,/content/face_module/dataset_extractedfaces/lfw_pairs/Renee Zellweger_1.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Catherine Deneuve_2.jpg,lfw_pairs,impersonation_attack
+1,32,/content/face_module/dataset_extractedfaces/lfw_pairs/Donald Rumsfeld_105.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Paul Burrell_11.jpg,lfw_pairs,impersonation_attack
+2,48,/content/face_module/dataset_extractedfaces/lfw_pairs/Renee Zellweger_14.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Venus Williams_9.jpg,lfw_pairs,impersonation_attack
+3,57,/content/face_module/dataset_extractedfaces/lfw_pairs/Mike Weir_10.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Luis Horna_2.jpg,lfw_pairs,impersonation_attack
+4,60,/content/face_module/dataset_extractedfaces/lfw_pairs/Jason Kidd_9.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Luiz Inacio Lula da Silva_22.jpg,lfw_pairs,impersonation_attack
+5,2,/content/face_module/dataset_extractedfaces/celeba_pairs/107859.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/031892.jpg,celeba_pairs,impersonation_attack
+6,8,/content/face_module/dataset_extractedfaces/celeba_pairs/023666.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/010959.jpg,celeba_pairs,impersonation_attack
+7,12,/content/face_module/dataset_extractedfaces/celeba_pairs/003089.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/016966.jpg,celeba_pairs,impersonation_attack
+8,26,/content/face_module/dataset_extractedfaces/celeba_pairs/113117.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/129449.jpg,celeba_pairs,impersonation_attack
+9,34,/content/face_module/dataset_extractedfaces/celeba_pairs/001430.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/046649.jpg,celeba_pairs,impersonation_attack
+10,3,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000007_0076_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000005_0080_01.jpg,vggface2_pairs,impersonation_attack
+11,5,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000004_0204_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000002_0070_01.jpg,vggface2_pairs,impersonation_attack
+12,17,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000016_0036_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000012_0087_01.jpg,vggface2_pairs,impersonation_attack
+13,19,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000007_0012_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000008_0101_01.jpg,vggface2_pairs,impersonation_attack
+14,21,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000012_0183_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000014_0113_01.jpg,vggface2_pairs,impersonation_attack
+15,6,/content/face_module/dataset_extractedfaces/lfw_pairs/Luiz Inacio Lula da Silva_7.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Luiz Inacio Lula da Silva_8.jpg,lfw_pairs,dodging_attack
+16,9,/content/face_module/dataset_extractedfaces/lfw_pairs/Colin Powell_75.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Colin Powell_76.jpg,lfw_pairs,dodging_attack
+17,15,/content/face_module/dataset_extractedfaces/lfw_pairs/George W Bush_518.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/George W Bush_519.jpg,lfw_pairs,dodging_attack
+18,16,/content/face_module/dataset_extractedfaces/lfw_pairs/Colin Powell_24.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Colin Powell_25.jpg,lfw_pairs,dodging_attack
+19,23,/content/face_module/dataset_extractedfaces/lfw_pairs/Tom Daschle_5.jpg,/content/face_module/dataset_extractedfaces/lfw_pairs/Tom Daschle_6.jpg,lfw_pairs,dodging_attack
+20,18,/content/face_module/dataset_extractedfaces/celeba_pairs/092809.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/108708.jpg,celeba_pairs,dodging_attack
+21,27,/content/face_module/dataset_extractedfaces/celeba_pairs/023869.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/024923.jpg,celeba_pairs,dodging_attack
+22,28,/content/face_module/dataset_extractedfaces/celeba_pairs/130980.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/147767.jpg,celeba_pairs,dodging_attack
+23,30,/content/face_module/dataset_extractedfaces/celeba_pairs/042909.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/048579.jpg,celeba_pairs,dodging_attack
+24,33,/content/face_module/dataset_extractedfaces/celeba_pairs/169016.jpg,/content/face_module/dataset_extractedfaces/celeba_pairs/171037.jpg,celeba_pairs,dodging_attack
+25,1,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000007_0113_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000007_0122_01.jpg,vggface2_pairs,dodging_attack
+26,4,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000008_0256_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000008_0348_01.jpg,vggface2_pairs,dodging_attack
+27,7,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000010_0058_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000010_0081_01.jpg,vggface2_pairs,dodging_attack
+28,10,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000005_0022_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000005_0076_01.jpg,vggface2_pairs,dodging_attack
+29,11,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000007_0176_01.jpg,/content/face_module/dataset_extractedfaces/vggface2_pairs/n000007_0335_03.jpg,vggface2_pairs,dodging_attack

@@ -51,7 +51,7 @@ def main():
     filtered_thresholds = {k: thresholds[k] for k in VICTIMS if k in thresholds}
 
     long_df = pd.read_csv(args.raw_long_csv)
-    rows = subset['row_id'].tolist()
+    rows = list(subset['row_id'])
     keep = long_df[
         long_df['row_id'].isin(rows)
         & long_df['attacker_model'].isin(ATTACKERS)
