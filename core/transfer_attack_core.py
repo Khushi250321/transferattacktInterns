@@ -22,6 +22,7 @@ VICTIM_MODELS = ['Facenet512', 'ArcFace', 'GhostFaceNet', 'VGG-Face', 'IR152']
 ALL_ATTACKS = [
     'PGD',
     'MI_FGSM',
+    'ATT',
     'TI_FGSM',
     'SI_NI_FGSM',
     'MI_ADMIX_DI_TI',
@@ -30,6 +31,7 @@ ALL_ATTACKS = [
 ATTACK_COLS = {
     'PGD': 'pgd_path',
     'MI_FGSM': 'mi_fgsm_path',
+    'ATT': 'att_path',
     'TI_FGSM': 'ti_fgsm_path',
     'SI_NI_FGSM': 'si_ni_fgsm_path',
     'MI_ADMIX_DI_TI': 'mi_admix_di_ti_path',
@@ -163,6 +165,55 @@ def mi_fgsm(model, x, tgt_emb, attack_type):
         adv = tf.clip_by_value(adv, -1.0, 1.0)
     return adv
 
+def att_attack(model, x, tgt_emb, attack_type):
+    """
+    ATT: Adaptive Token Tuning Attack (NeurIPS 2024)
+    Adapts three core ATT strategies to face recognition embedding space:
+    1. Adaptive gradient re-scaling across iterations
+    2. Self-paced patch-out for input diversity
+    3. Momentum for stable updates
+    """
+    adv = tf.identity(x)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    grad_history = []
+
+    for step in range(NUM_ITER):
+        with tf.GradientTape() as tape:
+            tape.watch(adv)
+            emb = compute_embedding(model, adv)
+            cos = tf.reduce_sum(emb * tgt_emb, axis=1)
+            loss = attack_loss(cos, attack_type)
+
+        grad = tape.gradient(loss, adv)
+
+        # Strategy 1: Adaptive gradient re-scaling
+        grad_history.append(grad)
+        if len(grad_history) > 1:
+            stacked = tf.stack(grad_history, axis=0)
+            grad_var = tf.math.reduce_variance(stacked, axis=0)
+            scale = 1.0 / (tf.sqrt(grad_var) + 1e-8)
+            scale = scale / (tf.reduce_mean(scale) + 1e-8)
+            grad = grad * scale
+
+        # Strategy 2: Self-paced patch-out
+        drop_prob = 0.1 + 0.05 * step
+        patch_mask = tf.cast(
+            tf.random.uniform(tf.shape(grad)) > drop_prob,
+            dtype=grad.dtype
+        )
+        grad = grad * patch_mask
+
+        # Strategy 3: Momentum
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        g = DECAY * g + grad
+        adv = adv + alpha * tf.sign(g)
+        adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
+        adv = tf.clip_by_value(adv, -1.0, 1.0)
+
+    return adv
+
 
 def ti_fgsm(model, x, tgt_emb, attack_type):
     adv = tf.identity(x)
@@ -251,6 +302,8 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return ti_fgsm(model, src, tgt_emb, attack_type)
     if attack_name == 'SI_NI_FGSM':
         return si_ni_fgsm(model, src, tgt_emb, attack_type)
+    if attack_name == 'ATT':
+        return att_attack(model, src, tgt_emb, attack_type)
     if attack_name == 'MI_ADMIX_DI_TI':
         pool_imgs = tf.concat([src, tgt, src], axis=0)
         return mi_admix_di_ti(model, src, tgt_emb, attack_type, pool_imgs, input_size)
