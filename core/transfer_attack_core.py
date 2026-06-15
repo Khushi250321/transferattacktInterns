@@ -238,7 +238,10 @@ def mi_admix_di_ti(model, x, tgt_emb, attack_type, pool_imgs, input_size):
         adv = tf.clip_by_value(adv, -1.0, 1.0)
     return adv
 
-
+# Student-contributed attack integration:
+# BPA_CNN by Om Singh Rawat (IIT Delhi)
+# Paper basis: Rethinking the Backward Propagation for Adversarial Transferability
+# (NeurIPS 2023)
 def bpa_cnn(model, x, tgt_emb, attack_type):
     """BPA-CNN: Backward Propagation Attack adapted for CNN face models.
 
