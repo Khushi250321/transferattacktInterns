@@ -20,6 +20,17 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 ## Verified student-contributed attack
 - BPA-CNN (Om Singh Rawat, IIT Delhi)
 
+## Current official subset baseline
+- SI_NI_FGSM: 29.17%
+- MI_FGSM: 26.67%
+- MI_ADMIX_DI_TI: 24.17%
+- TI_FGSM: 20.42%
+- PGD: 16.67%
+
+## Current verified student result
+- BPA_CNN (Om Singh Rawat, IIT Delhi): 30.21% breach rate, 0.1803 mean impact
+- This currently ranks above the strongest vanilla baseline on the provided subset.
+
 ## Not included
 - additional objective-level modifications from other project branches
 - API-specific evaluation code paths
@@ -66,3 +77,4 @@ Read:
 - `core/README.md`
 - `results_baseline/baseline_notes.md`
 - `results_student_attacks/bpa_cnn/README.md`
+- `results_student_attacks/bpa_cnn/bpa_cnn_vs_current_baseline_summary.csv`
