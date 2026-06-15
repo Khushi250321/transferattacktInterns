@@ -25,6 +25,7 @@ ALL_ATTACKS = [
     'TI_FGSM',
     'SI_NI_FGSM',
     'MI_ADMIX_DI_TI',
+    'BPA_CNN',
 ]
 
 ATTACK_COLS = {
@@ -33,6 +34,7 @@ ATTACK_COLS = {
     'TI_FGSM': 'ti_fgsm_path',
     'SI_NI_FGSM': 'si_ni_fgsm_path',
     'MI_ADMIX_DI_TI': 'mi_admix_di_ti_path',
+    'BPA_CNN': 'bpa_cnn_path',
 }
 
 EPSILON = 0.062
@@ -237,6 +239,56 @@ def mi_admix_di_ti(model, x, tgt_emb, attack_type, pool_imgs, input_size):
     return adv
 
 
+def bpa_cnn(model, x, tgt_emb, attack_type):
+    """BPA-CNN: Backward Propagation Attack adapted for CNN face models.
+
+    BPA (NeurIPS 2023) improves adversarial transferability by replacing
+    sharp backward operations (ReLU, MaxPool) with smooth alternatives
+    (SiLU derivative, softmax-weighted pooling).
+
+    Since we cannot modify internal layers of pre-trained DeepFace models,
+    we apply BPA's two key gradient-smoothing principles at the input level:
+      1. SiLU-derivative scaling  – counteracts ReLU binary gradient masking
+      2. Gaussian spatial smoothing – counteracts MaxPool gradient concentration
+    """
+    adv = tf.identity(x)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    kernel = gaussian_kernel(k=5, sigma=1.0)
+    temperature = 3.0
+
+    for _ in range(NUM_ITER):
+        with tf.GradientTape() as tape:
+            tape.watch(adv)
+            emb = compute_embedding(model, adv)
+            cos = tf.reduce_sum(emb * tgt_emb, axis=1)
+            loss = attack_loss(cos, attack_type)
+
+        grad = tape.gradient(loss, adv)
+
+        # BPA Step 1: SiLU-inspired gradient smoothing
+        # SiLU'(x) = sigmoid(x) + x * sigmoid(x) * (1 - sigmoid(x))
+        # Applied to the gradient to counteract ReLU's binary masking
+        scaled = temperature * grad
+        sig = tf.sigmoid(scaled)
+        silu_deriv = sig + scaled * sig * (1.0 - sig)
+        grad = grad * silu_deriv
+
+        # BPA Step 2: Gaussian spatial smoothing
+        # Counteracts MaxPool's winner-take-all gradient concentration
+        grad = tf.nn.depthwise_conv2d(grad, kernel, [1, 1, 1, 1], 'SAME')
+
+        # Momentum accumulation (inherited from MI-FGSM base)
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        g = DECAY * g + grad
+        adv = adv + alpha * tf.sign(g)
+        adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
+        adv = tf.clip_by_value(adv, -1.0, 1.0)
+
+    return adv
+
+
 def build_attacker(model_name: str):
     return DeepFace.build_model(model_name).model
 
@@ -254,4 +306,6 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
     if attack_name == 'MI_ADMIX_DI_TI':
         pool_imgs = tf.concat([src, tgt, src], axis=0)
         return mi_admix_di_ti(model, src, tgt_emb, attack_type, pool_imgs, input_size)
+    if attack_name == 'BPA_CNN':
+        return bpa_cnn(model, src, tgt_emb, attack_type)
     raise ValueError(f'Unsupported attack: {attack_name}')

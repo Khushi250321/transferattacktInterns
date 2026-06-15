@@ -17,6 +17,9 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - SI-NI-FGSM
 - MI-ADMIX-DI-TI
 
+## Verified student-contributed attack
+- BPA-CNN (Om Singh Rawat, IIT Delhi)
+
 ## Not included
 - additional objective-level modifications from other project branches
 - API-specific evaluation code paths
@@ -62,3 +65,4 @@ Read:
 - `docs/trackA_assignment.md`
 - `core/README.md`
 - `results_baseline/baseline_notes.md`
+- `results_student_attacks/bpa_cnn/README.md`

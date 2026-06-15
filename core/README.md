@@ -9,6 +9,9 @@ Included baseline attacks:
 - SI-NI-FGSM
 - MI-ADMIX-DI-TI
 
+Verified student-contributed attack now included:
+- BPA_CNN
+
 Not included:
 - extra objective-level modifications from other project branches
 - API-specific evaluation code paths
