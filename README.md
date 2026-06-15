@@ -45,6 +45,12 @@ See:
 - `results_baseline/subset_attack_summary_by_goal.csv`
 - `results_baseline/subset_attacker_victim_summary.csv`
 
+## Baseline reproducibility note
+- The baseline CSV files included in `results_baseline/` are the official reference for this repo.
+- These baseline summaries were prepared from a precomputed raw-similarity source and are the values students should use for comparison.
+- If you rerun the attack generation pipeline locally, you may observe small differences in breach rate and impact because adversarial sample generation is not fully deterministic across runs and environments.
+- In particular, clean similarities are expected to stay essentially unchanged, while adversarial similarities may vary slightly.
+
 ## Goal for interns
 Implement one new transfer attack that is **not already present in this repo**, adapt it to the face-verification setting, and compare it against the 5 vanilla baselines using breach rate and impact on the provided subset.
 

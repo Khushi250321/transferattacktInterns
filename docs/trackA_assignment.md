@@ -45,6 +45,12 @@ Existing baseline references for this subset:
 - `results_baseline/subset_attacker_victim_summary.csv`
 - `results_baseline/baseline_notes.md`
 
+Important baseline usage note:
+- Please use the provided CSV files in `results_baseline/` as the official baseline reference for comparison.
+- If you rerun the baseline attacks locally, you may observe small differences in the reported values.
+- This is expected because adversarial sample generation is not fully deterministic across runs and environments.
+- Therefore, your new attack should be compared against the provided baseline CSVs, not against a fresh local rerun unless explicitly instructed.
+
 ## Current strongest vanilla baselines on this subset
 - SI-NI-FGSM
 - MI-FGSM
