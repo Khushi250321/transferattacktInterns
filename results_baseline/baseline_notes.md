@@ -2,7 +2,7 @@
 
 Subset size: 30 source-target pairs
 
-Current strongest vanilla attack on this subset: **SI_NI_FGSM** with breach rate **31.46%** and mean impact **0.1788**.
+Current strongest vanilla attack on this subset: **SI_NI_FGSM** with breach rate **29.17%** and mean impact **0.1755**.
 
 Important note:
 - The CSV files in this folder are the official baseline reference for the intern assignment.
