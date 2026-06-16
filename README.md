@@ -19,6 +19,7 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 
 ## Verified student-contributed attack
 - BPA-CNN (Om Singh Rawat, IIT Delhi)
+- BSR (Chirag Sharma, IIIT Vadodara)
 
 ## Current official subset baseline
 - SI_NI_FGSM: 29.17%
@@ -27,9 +28,11 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - TI_FGSM: 20.42%
 - PGD: 16.67%
 
-## Current verified student result
+## Current verified student results
+- BSR (Chirag Sharma, IIIT Vadodara): 36.46% breach rate, 0.2048 mean impact
+- This currently ranks first among the verified student-contributed attacks on the provided subset.
 - BPA_CNN (Om Singh Rawat, IIT Delhi): 30.21% breach rate, 0.1803 mean impact
-- This currently ranks above the strongest vanilla baseline on the provided subset.
+- This also ranks above the strongest vanilla baseline on the provided subset.
 
 ## Not included
 - additional objective-level modifications from other project branches
@@ -76,5 +79,7 @@ Read:
 - `docs/trackA_assignment.md`
 - `core/README.md`
 - `results_baseline/baseline_notes.md`
+- `results_student_attacks/bsr/README.md`
+- `results_student_attacks/bsr/bsr_vs_current_baseline_summary.csv`
 - `results_student_attacks/bpa_cnn/README.md`
 - `results_student_attacks/bpa_cnn/bpa_cnn_vs_current_baseline_summary.csv`

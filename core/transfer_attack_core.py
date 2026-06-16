@@ -26,6 +26,7 @@ ALL_ATTACKS = [
     'SI_NI_FGSM',
     'MI_ADMIX_DI_TI',
     'BPA_CNN',
+    'BSR',
 ]
 
 ATTACK_COLS = {
@@ -35,6 +36,7 @@ ATTACK_COLS = {
     'SI_NI_FGSM': 'si_ni_fgsm_path',
     'MI_ADMIX_DI_TI': 'mi_admix_di_ti_path',
     'BPA_CNN': 'bpa_cnn_path',
+    'BSR': 'bsr_path',
 }
 
 EPSILON = 0.062
@@ -292,6 +294,84 @@ def bpa_cnn(model, x, tgt_emb, attack_type):
     return adv
 
 
+_BSR_MIN_DIM = 4
+
+
+def _bsr_get_lengths(total: int, num_block: int):
+    rand = np.random.uniform(size=num_block).astype(np.float32)
+    sizes = np.round(rand * total / rand.sum()).astype(np.int32)
+    sizes = np.maximum(sizes, _BSR_MIN_DIM)
+    while sizes.sum() > total:
+        sizes[sizes.argmax()] -= 1
+    while sizes.sum() < total:
+        sizes[sizes.argmin()] += 1
+    return sizes.tolist()
+
+
+def _bsr_rotate(image, angle_rad):
+    h_int = int(image.shape[1])
+    w_int = int(image.shape[2])
+    if h_int < _BSR_MIN_DIM or w_int < _BSR_MIN_DIM:
+        return image
+    cx, cy = float(w_int) / 2.0, float(h_int) / 2.0
+    cos_a = tf.math.cos(-angle_rad)
+    sin_a = tf.math.sin(-angle_rad)
+    tx = cx - cx * cos_a + cy * sin_a
+    ty = cy - cx * sin_a - cy * cos_a
+    transform = tf.reshape(
+        tf.stack([cos_a, -sin_a, tx, sin_a, cos_a, ty, 0.0, 0.0]), [1, 8]
+    )
+    out_shape = tf.cast(tf.stack([h_int, w_int]), dtype=tf.int32)
+    return tf.raw_ops.ImageProjectiveTransformV3(
+        images=tf.cast(image, tf.float32),
+        transforms=tf.cast(transform, tf.float32),
+        output_shape=out_shape,
+        interpolation='BILINEAR',
+        fill_mode='REFLECT',
+        fill_value=0.0,
+    )
+
+
+def _bsr_shuffle_rotate(x, num_block: int = 2):
+    h_val, w_val = int(x.shape[1]), int(x.shape[2])
+    w_strips = tf.split(x, _bsr_get_lengths(w_val, num_block), axis=2)
+    result_w = []
+    for wi in np.random.permutation(num_block).tolist():
+        h_strips = tf.split(w_strips[wi], _bsr_get_lengths(h_val, num_block), axis=1)
+        result_h = []
+        for hi in np.random.permutation(num_block).tolist():
+            angle = tf.random.truncated_normal([], stddev=0.05)
+            result_h.append(_bsr_rotate(h_strips[hi], angle))
+        result_w.append(tf.concat(result_h, axis=1))
+    return tf.concat(result_w, axis=2)
+
+
+# Student-contributed attack integration:
+# BSR by Chirag Sharma (IIIT Vadodara)
+# Paper basis: Boosting Adversarial Transferability by Block Shuffle and Rotation
+# (CVPR 2024)
+def bsr(model, x, tgt_emb, attack_type, num_copies: int = 20, num_block: int = 2):
+    adv = tf.Variable(tf.identity(x), trainable=True, dtype=tf.float32)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    for _ in range(NUM_ITER):
+        with tf.GradientTape() as tape:
+            copies = [_bsr_shuffle_rotate(adv, num_block) for _ in range(num_copies)]
+            x_batch = tf.concat(copies, axis=0)
+            tgt_rep = tf.repeat(tgt_emb, num_copies, axis=0)
+            emb = compute_embedding(model, x_batch)
+            cos = tf.reduce_sum(emb * tgt_rep, axis=1)
+            loss = attack_loss(cos, attack_type)
+        grad = tape.gradient(loss, adv)
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        g = DECAY * g + grad
+        adv.assign(adv + alpha * tf.sign(g))
+        adv.assign(tf.clip_by_value(adv, x - EPSILON, x + EPSILON))
+        adv.assign(tf.clip_by_value(adv, -1.0, 1.0))
+    return tf.identity(adv)
+
+
 def build_attacker(model_name: str):
     return DeepFace.build_model(model_name).model
 
@@ -311,4 +391,6 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return mi_admix_di_ti(model, src, tgt_emb, attack_type, pool_imgs, input_size)
     if attack_name == 'BPA_CNN':
         return bpa_cnn(model, src, tgt_emb, attack_type)
+    if attack_name == 'BSR':
+        return bsr(model, src, tgt_emb, attack_type)
     raise ValueError(f'Unsupported attack: {attack_name}')
