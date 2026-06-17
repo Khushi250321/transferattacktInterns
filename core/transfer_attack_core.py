@@ -27,6 +27,7 @@ ALL_ATTACKS = [
     'MI_ADMIX_DI_TI',
     'BPA_CNN',
     'BSR',
+    'DECOWA',
 ]
 
 ATTACK_COLS = {
@@ -37,11 +38,16 @@ ATTACK_COLS = {
     'MI_ADMIX_DI_TI': 'mi_admix_di_ti_path',
     'BPA_CNN': 'bpa_cnn_path',
     'BSR': 'bsr_path',
+    'DECOWA': 'decowa_path',
 }
 
 EPSILON = 0.062
 NUM_ITER = 5
 DECAY = 1.0
+DECOWA_MESH = 3
+DECOWA_NUM_WARPING = 20
+DECOWA_NOISE_SCALE = 2.0
+DECOWA_RHO = 0.01
 
 
 def configure_cpu_runtime(tf_threads: int = 1) -> None:
@@ -372,6 +378,156 @@ def bsr(model, x, tgt_emb, attack_type, num_copies: int = 20, num_block: int = 2
     return tf.identity(adv)
 
 
+def _decowa_grid_points_2d(width, height):
+    a = tf.linspace(-1.0, 1.0, height)
+    b = tf.linspace(-1.0, 1.0, width)
+    xx, yy = tf.meshgrid(a, b, indexing='ij')
+    pts = tf.stack([yy, xx], axis=-1)
+    return tf.reshape(pts, [-1, 2])
+
+
+def _decowa_noisy_grid(width, height, noise_map):
+    grid = _decowa_grid_points_2d(width, height)
+    mod = tf.pad(noise_map, [[1, 1], [1, 1], [0, 0]])
+    return grid + tf.reshape(mod, [-1, 2])
+
+
+def _decowa_K(x_val, y_val):
+    eps = 1e-9
+    d2 = tf.reduce_sum(tf.square(x_val[:, :, None, :] - y_val[:, None, :, :]), axis=-1)
+    return d2 * tf.math.log(d2 + eps)
+
+
+def _decowa_P(x_val):
+    n_val = tf.shape(x_val)[0]
+    k_val = tf.shape(x_val)[1]
+    return tf.concat([tf.ones([n_val, k_val, 1]), x_val], axis=-1)
+
+
+def _decowa_tps_coeffs(x_val, y_val):
+    k_val = tf.shape(x_val)[1]
+    n_val = tf.shape(x_val)[0]
+    k_mat = _decowa_K(x_val, x_val)
+    p_mat = _decowa_P(x_val)
+    top = tf.concat([k_mat, p_mat], axis=-1)
+    bottom = tf.concat([tf.transpose(p_mat, [0, 2, 1]), tf.zeros([n_val, 3, 3])], axis=-1)
+    l_mat = tf.concat([top, bottom], axis=1)
+    z_mat = tf.concat([y_val, tf.zeros([n_val, 3, 2])], axis=1)
+    q_val = tf.linalg.solve(l_mat, z_mat)
+    return q_val[:, :k_val], q_val[:, k_val:]
+
+
+def _decowa_dense_grid(height, width):
+    gx = tf.linspace(-1.0, 1.0, width)
+    gy = tf.linspace(-1.0, 1.0, height)
+    x0 = tf.tile(gx[None, None, :], [1, height, 1])
+    y0 = tf.tile(gy[None, :, None], [1, 1, width])
+    grid = tf.stack([x0, y0], axis=-1)
+    return tf.reshape(grid, [1, height * width, 2])
+
+
+def _decowa_tps_grid(x_val, y_val, height, width):
+    w_coef, a_coef = _decowa_tps_coeffs(x_val, y_val)
+    base = _decowa_dense_grid(height, width)
+    u_mat = _decowa_K(base, x_val)
+    p_mat = _decowa_P(base)
+    grid = tf.matmul(p_mat, a_coef) + tf.matmul(u_mat, w_coef)
+    return tf.reshape(grid, [1, height, width, 2])
+
+
+def _decowa_grid_sample(img, grid):
+    n_val = tf.shape(img)[0]
+    height = tf.shape(img)[1]
+    width = tf.shape(img)[2]
+    height_f = tf.cast(height, tf.float32)
+    width_f = tf.cast(width, tf.float32)
+    x_val = grid[..., 0]
+    y_val = grid[..., 1]
+    ix = ((x_val + 1.0) * width_f - 1.0) / 2.0
+    iy = ((y_val + 1.0) * height_f - 1.0) / 2.0
+    ix0 = tf.floor(ix)
+    iy0 = tf.floor(iy)
+    wx1 = ix - ix0
+    wy1 = iy - iy0
+    wx0 = 1.0 - wx1
+    wy0 = 1.0 - wy1
+
+    def sample(ixc, iyc):
+        in_x = tf.logical_and(ixc >= 0.0, ixc <= width_f - 1.0)
+        in_y = tf.logical_and(iyc >= 0.0, iyc <= height_f - 1.0)
+        mask = tf.cast(tf.logical_and(in_x, in_y), tf.float32)[..., None]
+        xc = tf.clip_by_value(tf.cast(ixc, tf.int32), 0, width - 1)
+        yc = tf.clip_by_value(tf.cast(iyc, tf.int32), 0, height - 1)
+        bidx = tf.broadcast_to(tf.reshape(tf.range(n_val), [n_val, 1, 1]), tf.shape(xc))
+        idx = tf.stack([bidx, yc, xc], axis=-1)
+        return tf.gather_nd(img, idx) * mask
+
+    v00 = sample(ix0, iy0)
+    v01 = sample(ix0, iy0 + 1.0)
+    v10 = sample(ix0 + 1.0, iy0)
+    v11 = sample(ix0 + 1.0, iy0 + 1.0)
+    return (
+        v00 * (wx0 * wy0)[..., None]
+        + v10 * (wx1 * wy0)[..., None]
+        + v01 * (wx0 * wy1)[..., None]
+        + v11 * (wx1 * wy1)[..., None]
+    )
+
+
+def _decowa_warp(adv, noise_map, height, width):
+    x_val = _decowa_grid_points_2d(DECOWA_MESH, DECOWA_MESH)[None, ...]
+    y_val = _decowa_noisy_grid(DECOWA_MESH, DECOWA_MESH, noise_map)[None, ...]
+    grid = _decowa_tps_grid(x_val, y_val, height, width)
+    grid = tf.tile(grid, [tf.shape(adv)[0], 1, 1, 1])
+    return _decowa_grid_sample(adv, grid)
+
+
+def _decowa_update_noise_map(model, adv, tgt_emb, attack_type, height, width):
+    noise_map = (tf.random.uniform([DECOWA_MESH - 2, DECOWA_MESH - 2, 2]) - 0.5) * DECOWA_NOISE_SCALE
+    with tf.GradientTape() as tape:
+        tape.watch(noise_map)
+        warped = _decowa_warp(adv, noise_map, height, width)
+        emb = compute_embedding(model, warped)
+        cos = tf.reduce_sum(emb * tgt_emb, axis=1)
+        loss = attack_loss(cos, attack_type)
+    grad = tape.gradient(loss, noise_map)
+    if grad is None:
+        return noise_map
+    grad = tf.where(tf.math.is_finite(grad), grad, tf.zeros_like(grad))
+    return noise_map - DECOWA_RHO * grad
+
+
+# Student-contributed attack integration:
+# DeCowA by Om Singh Rawat (IIT Delhi)
+# Paper basis: Boosting Adversarial Transferability across Model Genus by
+# Deformation-Constrained Warping (AAAI 2024)
+def decowa(model, x, tgt_emb, attack_type, input_size):
+    adv = tf.identity(x)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    height, width = int(input_size[1]), int(input_size[0])
+    for _ in range(NUM_ITER):
+        grads = tf.zeros_like(x)
+        for _ in range(DECOWA_NUM_WARPING):
+            noise_map = _decowa_update_noise_map(model, tf.stop_gradient(adv), tgt_emb, attack_type, height, width)
+            with tf.GradientTape() as tape:
+                tape.watch(adv)
+                warped = _decowa_warp(adv, noise_map, height, width)
+                emb = compute_embedding(model, warped)
+                cos = tf.reduce_sum(emb * tgt_emb, axis=1)
+                loss = attack_loss(cos, attack_type)
+            grad = tape.gradient(loss, adv)
+            grads += tf.where(tf.math.is_finite(grad), grad, tf.zeros_like(grad))
+        grads = grads / DECOWA_NUM_WARPING
+        grads = grads / (tf.reduce_mean(tf.abs(grads)) + 1e-8)
+        g = DECAY * g + grads
+        adv = adv + alpha * tf.sign(g)
+        adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
+        adv = tf.clip_by_value(adv, -1.0, 1.0)
+    return adv
+
+
 def build_attacker(model_name: str):
     return DeepFace.build_model(model_name).model
 
@@ -393,4 +549,6 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return bpa_cnn(model, src, tgt_emb, attack_type)
     if attack_name == 'BSR':
         return bsr(model, src, tgt_emb, attack_type)
+    if attack_name == 'DECOWA':
+        return decowa(model, src, tgt_emb, attack_type, input_size)
     raise ValueError(f'Unsupported attack: {attack_name}')

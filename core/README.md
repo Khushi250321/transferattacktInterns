@@ -12,6 +12,7 @@ Included baseline attacks:
 Verified student-contributed attacks now included:
 - BPA_CNN
 - BSR
+- DECOWA
 
 Not included:
 - extra objective-level modifications from other project branches
