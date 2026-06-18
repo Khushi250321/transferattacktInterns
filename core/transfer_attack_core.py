@@ -28,6 +28,7 @@ ALL_ATTACKS = [
     'BPA_CNN',
     'BSR',
     'DECOWA',
+    'SIA_MI_TI',
 ]
 
 ATTACK_COLS = {
@@ -39,6 +40,7 @@ ATTACK_COLS = {
     'BPA_CNN': 'bpa_cnn_path',
     'BSR': 'bsr_path',
     'DECOWA': 'decowa_path',
+    'SIA_MI_TI': 'sia_mi_ti_path',
 }
 
 EPSILON = 0.062
@@ -528,6 +530,104 @@ def decowa(model, x, tgt_emb, attack_type, input_size):
     return adv
 
 
+def sia_vertical_shift(block):
+    h_val = tf.shape(block)[1]
+    shift = tf.random.uniform([], 0, tf.maximum(h_val, 1), dtype=tf.int32)
+    return tf.roll(block, shift=shift, axis=1)
+
+
+def sia_horizontal_shift(block):
+    w_val = tf.shape(block)[2]
+    shift = tf.random.uniform([], 0, tf.maximum(w_val, 1), dtype=tf.int32)
+    return tf.roll(block, shift=shift, axis=2)
+
+
+def sia_vertical_flip(block):
+    return tf.reverse(block, axis=[1])
+
+
+def sia_horizontal_flip(block):
+    return tf.reverse(block, axis=[2])
+
+
+def sia_rotate180(block):
+    return tf.reverse(block, axis=[1, 2])
+
+
+def sia_scale(block):
+    factor = tf.random.uniform([], 0.5, 1.0)
+    return factor * block
+
+
+def sia_add_noise(block):
+    noise = tf.random.uniform(tf.shape(block), -EPSILON, EPSILON)
+    return block + noise
+
+
+SIA_OPS = [
+    sia_vertical_shift,
+    sia_horizontal_shift,
+    sia_vertical_flip,
+    sia_horizontal_flip,
+    sia_rotate180,
+    sia_scale,
+    sia_add_noise,
+]
+
+
+def sia_block_transform(x_val, num_block=3):
+    h_val, w_val = x_val.shape[1], x_val.shape[2]
+
+    def split_points(size, n_parts):
+        if size <= n_parts:
+            return [0, size]
+        pts = sorted(np.random.choice(range(1, size), n_parts - 1, replace=False).tolist())
+        return [0] + pts + [size]
+
+    h_pts = split_points(h_val, num_block)
+    w_pts = split_points(w_val, num_block)
+
+    rows = []
+    for i in range(len(h_pts) - 1):
+        cols = []
+        for j in range(len(w_pts) - 1):
+            block = x_val[:, h_pts[i]:h_pts[i + 1], w_pts[j]:w_pts[j + 1], :]
+            op = SIA_OPS[np.random.randint(len(SIA_OPS))]
+            cols.append(op(block))
+        rows.append(tf.concat(cols, axis=2))
+    return tf.concat(rows, axis=1)
+
+
+# Student-contributed attack integration:
+# SIA_MI_TI by Janhavi Kishor
+# Paper basis: Structure Invariant Transformation for better Adversarial Transferability
+# (ICCV 2023) combined with MI-FGSM and TI-FGSM
+def sia_mi_ti(model, x, tgt_emb, attack_type, num_copies=5, num_block=3):
+    adv = tf.identity(x)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    kernel = gaussian_kernel()
+
+    for _ in range(NUM_ITER):
+        with tf.GradientTape() as tape:
+            tape.watch(adv)
+            copies = [sia_block_transform(adv, num_block) for _ in range(num_copies)]
+            batch = tf.concat(copies, axis=0)
+            emb = compute_embedding(model, batch)
+            tgt_rep = tf.repeat(tgt_emb, num_copies, axis=0)
+            cos = tf.reduce_sum(emb * tgt_rep, axis=1)
+            loss = attack_loss(cos, attack_type)
+        grad = tape.gradient(loss, adv)
+        grad = tf.nn.depthwise_conv2d(grad, kernel, [1, 1, 1, 1], 'SAME')
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        g = DECAY * g + grad
+        adv = adv + alpha * tf.sign(g)
+        adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
+        adv = tf.clip_by_value(adv, -1.0, 1.0)
+    return adv
+
+
 def build_attacker(model_name: str):
     return DeepFace.build_model(model_name).model
 
@@ -551,4 +651,6 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return bsr(model, src, tgt_emb, attack_type)
     if attack_name == 'DECOWA':
         return decowa(model, src, tgt_emb, attack_type, input_size)
+    if attack_name == 'SIA_MI_TI':
+        return sia_mi_ti(model, src, tgt_emb, attack_type)
     raise ValueError(f'Unsupported attack: {attack_name}')
