@@ -37,7 +37,7 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - This currently ranks second among the verified student-contributed attacks on the provided subset.
 - BPA_CNN (Om Singh Rawat, IIT Delhi): 30.21% breach rate, 0.1803 mean impact
 - This also ranks above the strongest vanilla baseline on the provided subset.
-- SIA_MI_TI (Janhavi Kishor): 23.33% breach rate, 0.1376 mean impact
+- SIA_MI_TI (Janhavi Kishor, SRM University): 23.33% breach rate, 0.1376 mean impact
 - This verified result ranks below MI_ADMIX_DI_TI and above TI_FGSM on the provided subset.
 
 ## Not included
