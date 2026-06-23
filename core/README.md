@@ -15,6 +15,9 @@ Verified student-contributed attacks now included:
 - DECOWA
 - SIA_MI_TI
 
+Student-contributed attack included for future verification:
+- OPS
+
 Not included:
 - extra objective-level modifications from other project branches
 - API-specific evaluation code paths

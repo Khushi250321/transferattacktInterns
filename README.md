@@ -23,6 +23,11 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - DeCowA (Om Singh Rawat, IIT Delhi)
 - SIA_MI_TI (Janhavi Kishor)
 
+## Student-contributed attack added but not yet fully verified
+- OPS (Kkartik Aggarwal, Delhi Technological University)
+- This implementation has been integrated into the shared core for future reruns.
+- Its reported student-side numbers are not yet treated as official repository results because full subset verification was not completed under the submitted runtime-heavy configuration.
+
 ## Current official subset baseline
 - SI_NI_FGSM: 29.17%
 - MI_FGSM: 26.67%
@@ -93,3 +98,4 @@ Read:
 - `results_student_attacks/sia_mi_ti/sia_mi_ti_vs_current_baseline_summary.csv`
 - `results_student_attacks/bpa_cnn/README.md`
 - `results_student_attacks/bpa_cnn/bpa_cnn_vs_current_baseline_summary.csv`
+- `results_student_attacks/ops/README.md`

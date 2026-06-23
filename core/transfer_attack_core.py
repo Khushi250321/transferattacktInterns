@@ -1,4 +1,5 @@
 import os
+import random
 import uuid
 from pathlib import Path
 
@@ -29,6 +30,7 @@ ALL_ATTACKS = [
     'BSR',
     'DECOWA',
     'SIA_MI_TI',
+    'OPS',
 ]
 
 ATTACK_COLS = {
@@ -41,6 +43,7 @@ ATTACK_COLS = {
     'BSR': 'bsr_path',
     'DECOWA': 'decowa_path',
     'SIA_MI_TI': 'sia_mi_ti_path',
+    'OPS': 'ops_path',
 }
 
 EPSILON = 0.062
@@ -50,6 +53,10 @@ DECOWA_MESH = 3
 DECOWA_NUM_WARPING = 20
 DECOWA_NOISE_SCALE = 2.0
 DECOWA_RHO = 0.01
+OPS_BETA = 2.0
+OPS_NUM_NEIGHBOR = 10
+OPS_NUM_OPERATOR = 10
+OPS_SAMPLE_LEVELS = (2, 3, 4)
 
 
 def configure_cpu_runtime(tf_threads: int = 1) -> None:
@@ -628,6 +635,151 @@ def sia_mi_ti(model, x, tgt_emb, attack_type, num_copies=5, num_block=3):
     return adv
 
 
+def _ops_rotate(image, angle_rad):
+    h_int = int(image.shape[1])
+    w_int = int(image.shape[2])
+    if h_int < 4 or w_int < 4:
+        return image
+    cx, cy = float(w_int) / 2.0, float(h_int) / 2.0
+    cos_a = tf.math.cos(-angle_rad)
+    sin_a = tf.math.sin(-angle_rad)
+    tx = cx - cx * cos_a + cy * sin_a
+    ty = cy - cx * sin_a - cy * cos_a
+    transform = tf.reshape(
+        tf.stack([cos_a, -sin_a, tx, sin_a, cos_a, ty, 0.0, 0.0]), [1, 8]
+    )
+    out_shape = tf.cast(tf.stack([h_int, w_int]), dtype=tf.int32)
+    return tf.raw_ops.ImageProjectiveTransformV3(
+        images=tf.cast(image, tf.float32),
+        transforms=tf.cast(transform, tf.float32),
+        output_shape=out_shape,
+        interpolation='BILINEAR',
+        fill_mode='REFLECT',
+        fill_value=0.0,
+    )
+
+
+def _ops_dim(x, input_size, resize_rate):
+    img_size = int(input_size[0])
+    img_resize = int(round(img_size * resize_rate))
+    rnd = tf.random.uniform(
+        [],
+        min(img_size, img_resize),
+        max(img_size, img_resize) + 1,
+        dtype=tf.int32,
+    )
+    rescaled = tf.image.resize(x, (rnd, rnd))
+    pad_total = img_resize - rnd
+    pad_top = tf.random.uniform([], 0, pad_total + 1, dtype=tf.int32)
+    pad_bottom = pad_total - pad_top
+    pad_left = tf.random.uniform([], 0, pad_total + 1, dtype=tf.int32)
+    pad_right = pad_total - pad_left
+    padded = tf.pad(rescaled, [[0, 0], [pad_top, pad_bottom], [pad_left, pad_right], [0, 0]])
+    return tf.image.resize(padded, input_size)
+
+
+def _ops_apply_basic(x, op_id, input_size):
+    height = int(input_size[1])
+    width = int(input_size[0])
+    if op_id == 0:
+        return x
+    if op_id == 1:
+        return tf.reverse(x, axis=[1])
+    if op_id == 2:
+        return tf.reverse(x, axis=[2])
+    if op_id == 3:
+        return tf.roll(x, shift=np.random.randint(0, height), axis=1)
+    if op_id == 4:
+        return tf.roll(x, shift=np.random.randint(0, width), axis=2)
+    if op_id == 5:
+        return _ops_rotate(x, np.deg2rad(5.0))
+    if op_id == 6:
+        return _ops_rotate(x, np.deg2rad(-5.0))
+    if op_id == 7:
+        return _ops_rotate(x, np.deg2rad(15.0))
+    if op_id == 8:
+        return _ops_rotate(x, np.deg2rad(-15.0))
+    if op_id == 9:
+        return _ops_rotate(x, np.deg2rad(45.0))
+    if op_id == 10:
+        return _ops_rotate(x, np.deg2rad(-45.0))
+    if op_id == 11:
+        return tf.image.rot90(x, k=1)
+    if op_id == 12:
+        return tf.image.rot90(x, k=3)
+    if op_id == 13:
+        return tf.image.rot90(x, k=2)
+    if 14 <= op_id <= 20:
+        return x / float(op_id - 12)
+    return _ops_dim(x, input_size, 1.1 + 0.2 * float(op_id - 21))
+
+
+def _ops_init_operator_ids():
+    op_ids = []
+    for level in OPS_SAMPLE_LEVELS:
+        for _ in range(31):
+            op_ids.append(tuple(random.randrange(31) for _ in range(level)))
+    return op_ids
+
+
+def _ops_init_eps_list(x):
+    sample_ratios = np.arange(0.25, 1.76, 0.25, dtype=np.float32)
+    eps_list = []
+    for ratio in sample_ratios:
+        radius = float(OPS_BETA * EPSILON * ratio)
+        for _ in range(OPS_NUM_NEIGHBOR):
+            eps_list.append(tf.random.uniform(tf.shape(x), -radius, radius, dtype=x.dtype))
+    return eps_list
+
+
+def _ops_apply_operator(x, input_size, op_ids):
+    out = x
+    for op_id in op_ids:
+        out = _ops_apply_basic(out, op_id, input_size)
+    return out
+
+
+# Student-contributed attack integration:
+# OPS by Kkartik Aggarwal (Delhi Technological University)
+# Paper basis: Boosting Adversarial Transferability through Augmentation in
+# Hypothesis Space (CVPR 2025)
+def ops_attack(model, x, tgt_emb, attack_type, input_size):
+    adv = tf.identity(x)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    eps_list = _ops_init_eps_list(x)
+
+    for _ in range(NUM_ITER):
+        selected_eps = random.sample(eps_list, min(OPS_NUM_NEIGHBOR, len(eps_list)))
+        op_groups = []
+        for _ in selected_eps:
+            op_list = _ops_init_operator_ids()
+            op_groups.append(random.sample(op_list, min(OPS_NUM_OPERATOR, len(op_list))))
+
+        with tf.GradientTape() as tape:
+            tape.watch(adv)
+            samples = [adv]
+            for noise, selected_ops in zip(selected_eps, op_groups):
+                for op_ids in selected_ops:
+                    samples.append(_ops_apply_operator(adv + noise, input_size, op_ids))
+            batch = tf.concat(samples, axis=0)
+            tgt_rep = tf.repeat(tgt_emb, tf.shape(batch)[0], axis=0)
+            emb = compute_embedding(model, batch)
+            cos = tf.reduce_sum(emb * tgt_rep, axis=1)
+            loss = attack_loss(cos, attack_type)
+        grad = tape.gradient(loss, adv)
+        if grad is None:
+            grad = tf.zeros_like(adv)
+        grad = tf.where(tf.math.is_finite(grad), grad, tf.zeros_like(grad))
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        g = DECAY * g + grad
+        adv = adv + alpha * tf.sign(g)
+        adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
+        adv = tf.clip_by_value(adv, -1.0, 1.0)
+    return adv
+
+
 def build_attacker(model_name: str):
     return DeepFace.build_model(model_name).model
 
@@ -653,4 +805,6 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return decowa(model, src, tgt_emb, attack_type, input_size)
     if attack_name == 'SIA_MI_TI':
         return sia_mi_ti(model, src, tgt_emb, attack_type)
+    if attack_name == 'OPS':
+        return ops_attack(model, src, tgt_emb, attack_type, input_size)
     raise ValueError(f'Unsupported attack: {attack_name}')
