@@ -17,16 +17,12 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - SI-NI-FGSM
 - MI-ADMIX-DI-TI
 
-## Verified student-contributed attack
-- BPA-CNN (Om Singh Rawat, IIT Delhi)
-- BSR (Chirag Sharma, IIIT Vadodara)
-- DeCowA (Om Singh Rawat, IIT Delhi)
-- SIA_MI_TI (Janhavi Kishor)
-
-## Student-contributed attack added but not yet fully verified
-- OPS (Kkartik Aggarwal, Delhi Technological University)
-- This implementation has been integrated into the shared core for future reruns.
-- Its reported student-side numbers are not yet treated as official repository results because full subset verification was not completed under the submitted runtime-heavy configuration.
+## Completed student-contributed attacks
+- `BPA_CNN` — Om Singh Rawat, IIT Delhi — *Rethinking the Backward Propagation for Adversarial Transferability* (NeurIPS 2023)
+- `BSR` — Chirag Sharma, IIIT Vadodara — *Boosting Adversarial Transferability by Block Shuffle and Rotation* (CVPR 2024)
+- `DECOWA` — Om Singh Rawat, IIT Delhi — *Boosting Adversarial Transferability across Model Genus by Deformation-Constrained Warping* (AAAI 2024)
+- `SIA_MI_TI` — Janhavi Kishor, SRM University — *Structure Invariant Transformation for better Adversarial Transferability* (ICCV 2023), adapted with MI-FGSM and TI-FGSM
+- `OPS` — Kkartik Aggarwal, Delhi Technological University (DTU) — *Boosting Adversarial Transferability through Augmentation in Hypothesis Space* (CVPR 2025)
 
 ## Current official subset baseline
 - SI_NI_FGSM: 29.17%

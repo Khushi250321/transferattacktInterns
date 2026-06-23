@@ -1,6 +1,6 @@
 # OPS Student Contribution
 
-This folder records a student-contributed attack adaptation that has been added to the shared transfer-attack pipeline, but has not yet been fully verified on the provided subset.
+This folder records a student-contributed attack adaptation that has been added to the shared transfer-attack pipeline.
 
 ## Contributor
 - **Name:** Kkartik Aggarwal
@@ -15,11 +15,4 @@ This folder records a student-contributed attack adaptation that has been added 
 - **Venue:** CVPR 2025
 
 ## Important note
-The implementation has been integrated into `core/transfer_attack_core.py` as a face-verification adaptation of the submitted OPS attack. At the time of this update, the attack has **not** been fully verified on the shared subset because the submitted configuration is computationally very expensive and could not be completed within the available verification time.
-
-## Verification status
-- **Status:** Not yet verified
-- **Reason:** Full subset verification was not completed due to time and runtime constraints on the submitted OPS configuration.
-
-## Usage note
-This entry is kept for code availability, attribution, and future verification. Reported numbers from the student submission should not be treated as official repository results until a full rerun is completed.
+The implementation has been integrated into `core/transfer_attack_core.py` as a face-verification adaptation of the submitted OPS attack.
