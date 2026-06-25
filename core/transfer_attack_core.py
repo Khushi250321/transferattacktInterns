@@ -31,6 +31,7 @@ ALL_ATTACKS = [
     'DECOWA',
     'SIA_MI_TI',
     'OPS',
+    'ATT_CNN',
     'DPA_HMA',
     'DPA_HMA_ENSEMBLE',
 ]
@@ -46,6 +47,7 @@ ATTACK_COLS = {
     'DECOWA': 'decowa_path',
     'SIA_MI_TI': 'sia_mi_ti_path',
     'OPS': 'ops_path',
+    'ATT_CNN': 'att_cnn_path',
     'DPA_HMA': 'dpa_hma_path',
     'DPA_HMA_ENSEMBLE': 'dpa_hma_ensemble_path',
 }
@@ -213,6 +215,40 @@ def mi_fgsm(model, x, tgt_emb, attack_type):
         adv = adv + alpha * tf.sign(g)
         adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
         adv = tf.clip_by_value(adv, -1.0, 1.0)
+    return adv
+
+
+# Student-contributed attack integration:
+# ATT_CNN by Keshav Raj (IIIT Delhi)
+# ATT-CNN is a CNN-side adaptation inspired by the NeurIPS 2024 ATT paper.
+# It is not an official reproduction of the ViT token-hook ATT algorithm.
+def att_cnn_attack(model, x, tgt_emb, attack_type):
+    adv = tf.identity(x)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+
+    for _ in range(NUM_ITER):
+        with tf.GradientTape() as tape:
+            tape.watch(adv)
+            emb = compute_embedding(model, adv)
+            cos = tf.reduce_sum(emb * tgt_emb, axis=1)
+            loss = attack_loss(cos, attack_type)
+
+        grad = tape.gradient(loss, adv)
+        grad_var = tf.math.reduce_variance(grad)
+        grad = grad / (tf.sqrt(grad_var) + 1e-8)
+
+        mean_grad = tf.reduce_mean(tf.abs(grad))
+        strong_mask = tf.abs(grad) > mean_grad
+        grad = tf.where(strong_mask, grad * 0.7, grad)
+
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        g = DECAY * g + grad
+        adv = adv + alpha * tf.sign(g)
+        adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
+        adv = tf.clip_by_value(adv, -1.0, 1.0)
+
     return adv
 
 
@@ -982,6 +1018,8 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return sia_mi_ti(model, src, tgt_emb, attack_type)
     if attack_name == 'OPS':
         return ops_attack(model, src, tgt_emb, attack_type, input_size)
+    if attack_name == 'ATT_CNN':
+        return att_cnn_attack(model, src, tgt_emb, attack_type)
     if attack_name == 'DPA_HMA':
         return dpa_hma(model, src, tgt_emb, attack_type)
     if attack_name == 'DPA_HMA_ENSEMBLE':

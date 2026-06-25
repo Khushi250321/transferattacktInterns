@@ -15,6 +15,7 @@ Student-contributed attacks now included:
 - DECOWA
 - SIA_MI_TI
 - OPS
+- ATT_CNN
 - DPA_HMA
 
 Not included:
