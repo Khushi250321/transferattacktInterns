@@ -31,6 +31,8 @@ ALL_ATTACKS = [
     'DECOWA',
     'SIA_MI_TI',
     'OPS',
+    'DPA_HMA',
+    'DPA_HMA_ENSEMBLE',
 ]
 
 ATTACK_COLS = {
@@ -44,6 +46,8 @@ ATTACK_COLS = {
     'DECOWA': 'decowa_path',
     'SIA_MI_TI': 'sia_mi_ti_path',
     'OPS': 'ops_path',
+    'DPA_HMA': 'dpa_hma_path',
+    'DPA_HMA_ENSEMBLE': 'dpa_hma_ensemble_path',
 }
 
 EPSILON = 0.062
@@ -57,6 +61,35 @@ OPS_BETA = 2.0
 OPS_NUM_NEIGHBOR = 10
 OPS_NUM_OPERATOR = 10
 OPS_SAMPLE_LEVELS = (2, 3, 4)
+DPA_HMA_SEED = int(os.environ.get('TRANSFER_ATTACK_DPA_HMA_SEED', '1'))
+DPA_HMA_NUM_ITER = int(os.environ.get('TRANSFER_ATTACK_DPA_HMA_NUM_ITER', str(NUM_ITER)))
+DPA_HMA_ENSEMBLE_NUM_ITER = int(os.environ.get('TRANSFER_ATTACK_DPA_HMA_ENSEMBLE_NUM_ITER', str(DPA_HMA_NUM_ITER)))
+DPA_HMA_CANONICAL_SIZE = (224, 224)
+DPA_HMA_ENSEMBLE_SURROGATES_BY_VICTIM = {
+    'Facenet512': ('ArcFace', 'GhostFaceNet', 'VGG-Face'),
+    'ArcFace': ('Facenet512', 'GhostFaceNet', 'VGG-Face'),
+    'GhostFaceNet': ('Facenet512', 'ArcFace', 'VGG-Face'),
+    'VGG-Face': ('Facenet512', 'ArcFace', 'GhostFaceNet'),
+    'IR152': ('Facenet512', 'ArcFace', 'GhostFaceNet'),
+}
+_dpa_hma_seeded = False
+
+
+def set_global_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+
+
+def _ensure_dpa_hma_seed() -> None:
+    global _dpa_hma_seeded
+    if not _dpa_hma_seeded:
+        set_global_seed(DPA_HMA_SEED)
+        _dpa_hma_seeded = True
+
+
+def dpa_hma_ensemble_surrogates_for_victim(victim_name: str):
+    return DPA_HMA_ENSEMBLE_SURROGATES_BY_VICTIM[str(victim_name)]
 
 
 def configure_cpu_runtime(tf_threads: int = 1) -> None:
@@ -780,6 +813,148 @@ def ops_attack(model, x, tgt_emb, attack_type, input_size):
     return adv
 
 
+def _dpa_hma_affine(image, std_proj, std_rotate):
+    h_int = int(image.shape[1])
+    w_int = int(image.shape[2])
+    if h_int <= 1 or w_int <= 1:
+        return image
+
+    cx, cy = float(w_int) / 2.0, float(h_int) / 2.0
+    angle = tf.random.truncated_normal([], stddev=std_rotate)
+    scale = 1.0 + tf.random.truncated_normal([], stddev=std_proj)
+    tx_noise = tf.random.truncated_normal([], stddev=std_proj) * float(w_int)
+    ty_noise = tf.random.truncated_normal([], stddev=std_proj) * float(h_int)
+
+    cos_a = tf.math.cos(-angle) * scale
+    sin_a = tf.math.sin(-angle) * scale
+    tx = cx - cx * cos_a + cy * sin_a + tx_noise
+    ty = cy - cx * sin_a - cy * cos_a + ty_noise
+
+    transform = tf.reshape(
+        tf.stack([cos_a, -sin_a, tx, sin_a, cos_a, ty, 0.0, 0.0]), [1, 8]
+    )
+    return tf.raw_ops.ImageProjectiveTransformV3(
+        images=tf.cast(image, tf.float32),
+        transforms=tf.cast(transform, tf.float32),
+        output_shape=tf.cast(tf.stack([h_int, w_int]), dtype=tf.int32),
+        interpolation='BILINEAR',
+        fill_mode='REFLECT',
+        fill_value=0.0,
+    )
+
+
+def _dpa_hma_transform_batch(adv, hard_grad, num_copies: int):
+    copies = []
+    hard_direction = tf.sign(hard_grad)
+    hard_steps = (0.0, 0.004, -0.004, 0.008, -0.008)
+    for i in range(num_copies):
+        step = hard_steps[i % len(hard_steps)]
+        hard_view = tf.clip_by_value(adv + step * hard_direction, -1.0, 1.0)
+        std_proj = tf.random.uniform([], 0.01, 0.08)
+        std_rotate = tf.random.uniform([], 0.01, 0.08)
+        copies.append(_dpa_hma_affine(hard_view, std_proj, std_rotate))
+    return tf.concat(copies, axis=0)
+
+
+def _dpa_hma_optimize(model, x, tgt_emb, attack_type, num_copies: int, num_iter: int):
+    if num_iter <= 0:
+        raise ValueError('DPA_HMA num_iter must be positive')
+    adv = tf.Variable(tf.identity(x), trainable=True, dtype=tf.float32)
+    momentum = tf.zeros_like(x)
+    alpha = EPSILON / num_iter
+
+    for _ in range(num_iter):
+        with tf.GradientTape() as hard_tape:
+            hard_tape.watch(adv)
+            hard_emb = compute_embedding(model, adv)
+            hard_cos = tf.reduce_sum(hard_emb * tgt_emb, axis=1)
+            hard_loss = attack_loss(hard_cos, attack_type)
+        hard_grad = hard_tape.gradient(hard_loss, adv)
+
+        with tf.GradientTape() as tape:
+            batch = _dpa_hma_transform_batch(adv, hard_grad, num_copies)
+            tgt_rep = tf.repeat(tgt_emb, num_copies, axis=0)
+            emb = compute_embedding(model, batch)
+            cos = tf.reduce_sum(emb * tgt_rep, axis=1)
+            loss = attack_loss(cos, attack_type)
+        grad = tape.gradient(loss, adv)
+        grad = tf.where(tf.math.is_finite(grad), grad, tf.zeros_like(grad))
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        momentum = DECAY * momentum + grad
+        adv.assign(adv + alpha * tf.sign(momentum))
+        adv.assign(tf.clip_by_value(adv, x - EPSILON, x + EPSILON))
+        adv.assign(tf.clip_by_value(adv, -1.0, 1.0))
+
+    return tf.identity(adv)
+
+
+# Student-contributed attack integration:
+# DPA_HMA by Kushal Khemka (DTU Delhi)
+# Paper basis: Diverse Parameters Augmentation (DPA) from Improving the
+# Transferability of Adversarial Attacks on Face Recognition (CVPR 2025)
+def dpa_hma(model, x, tgt_emb, attack_type, num_copies: int = 8, num_iter: int = DPA_HMA_NUM_ITER):
+    _ensure_dpa_hma_seed()
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    return _dpa_hma_optimize(model, x, tgt_emb, attack_type, num_copies, num_iter)
+
+
+def dpa_hma_ensemble(
+    models,
+    target_embeddings,
+    x,
+    attack_type,
+    num_copies: int = 8,
+    num_iter: int = DPA_HMA_ENSEMBLE_NUM_ITER,
+    canonical_size=DPA_HMA_CANONICAL_SIZE,
+):
+    _ensure_dpa_hma_seed()
+    if num_iter <= 0:
+        raise ValueError('DPA_HMA_ENSEMBLE num_iter must be positive')
+    if len(models) != len(target_embeddings):
+        raise ValueError('models and target_embeddings must have the same length')
+    if not models:
+        raise ValueError('DPA_HMA_ENSEMBLE requires at least one surrogate model')
+
+    adv = tf.Variable(tf.identity(x), trainable=True, dtype=tf.float32)
+    momentum = tf.zeros_like(adv)
+    alpha = EPSILON / num_iter
+    target_embeddings = [tf.nn.l2_normalize(t, axis=1) for t in target_embeddings]
+
+    for _ in range(num_iter):
+        hard_grads = []
+        for model, tgt_emb in zip(models, target_embeddings):
+            model_adv = tf.image.resize(adv, canonical_size)
+            with tf.GradientTape() as hard_tape:
+                hard_tape.watch(model_adv)
+                hard_emb = compute_embedding(model, model_adv)
+                hard_cos = tf.reduce_sum(hard_emb * tgt_emb, axis=1)
+                hard_loss = attack_loss(hard_cos, attack_type)
+            model_grad = hard_tape.gradient(hard_loss, model_adv)
+            hard_grads.append(tf.image.resize(model_grad, tf.shape(adv)[1:3]))
+        hard_grad = tf.add_n(hard_grads) / float(len(hard_grads))
+
+        ensemble_grads = []
+        for model, tgt_emb in zip(models, target_embeddings):
+            with tf.GradientTape() as tape:
+                batch = _dpa_hma_transform_batch(adv, hard_grad, num_copies)
+                batch_model = tf.image.resize(batch, canonical_size)
+                tgt_rep = tf.repeat(tgt_emb, num_copies, axis=0)
+                emb = compute_embedding(model, batch_model)
+                cos = tf.reduce_sum(emb * tgt_rep, axis=1)
+                loss = attack_loss(cos, attack_type)
+            grad = tape.gradient(loss, adv)
+            ensemble_grads.append(tf.where(tf.math.is_finite(grad), grad, tf.zeros_like(grad)))
+
+        grad = tf.add_n(ensemble_grads) / float(len(ensemble_grads))
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        momentum = DECAY * momentum + grad
+        adv.assign(adv + alpha * tf.sign(momentum))
+        adv.assign(tf.clip_by_value(adv, x - EPSILON, x + EPSILON))
+        adv.assign(tf.clip_by_value(adv, -1.0, 1.0))
+
+    return tf.identity(adv)
+
+
 def build_attacker(model_name: str):
     return DeepFace.build_model(model_name).model
 
@@ -807,4 +982,12 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return sia_mi_ti(model, src, tgt_emb, attack_type)
     if attack_name == 'OPS':
         return ops_attack(model, src, tgt_emb, attack_type, input_size)
+    if attack_name == 'DPA_HMA':
+        return dpa_hma(model, src, tgt_emb, attack_type)
+    if attack_name == 'DPA_HMA_ENSEMBLE':
+        raise ValueError(
+            'DPA_HMA_ENSEMBLE requires dpa_hma_ensemble(...) with victim-specific '
+            'surrogate models and target embeddings; the default assignment runner '
+            'passes only one surrogate model.'
+        )
     raise ValueError(f'Unsupported attack: {attack_name}')

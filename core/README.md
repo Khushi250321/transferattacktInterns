@@ -15,6 +15,7 @@ Student-contributed attacks now included:
 - DECOWA
 - SIA_MI_TI
 - OPS
+- DPA_HMA
 
 Not included:
 - extra objective-level modifications from other project branches

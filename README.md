@@ -23,6 +23,7 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - `DECOWA` — Om Singh Rawat, IIT Delhi — *Boosting Adversarial Transferability across Model Genus by Deformation-Constrained Warping* (AAAI 2024)
 - `SIA_MI_TI` — Janhavi Kishor, SRM University — *Structure Invariant Transformation for better Adversarial Transferability* (ICCV 2023), adapted with MI-FGSM and TI-FGSM
 - `OPS` — Kkartik Aggarwal, Delhi Technological University (DTU) — *Boosting Adversarial Transferability through Augmentation in Hypothesis Space* (CVPR 2025)
+- `DPA_HMA` — Kushal Khemka, Delhi Technological University (DTU) — *Improving the Transferability of Adversarial Attacks on Face Recognition with Diverse Parameters Augmentation* (CVPR 2025)
 
 ## Current official subset baseline
 - SI_NI_FGSM: 29.17%
@@ -32,10 +33,12 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - PGD: 16.67%
 
 ## Current verified student results
-- BSR (Chirag Sharma, IIIT Vadodara): 36.46% breach rate, 0.2048 mean impact
+- DPA_HMA (Kushal Khemka, DTU): 40.21% breach rate, 0.2150 mean impact
 - This currently ranks first among the verified student-contributed attacks on the provided subset.
-- DeCowA (Om Singh Rawat, IIT Delhi): 32.50% breach rate, 0.1931 mean impact
+- BSR (Chirag Sharma, IIIT Vadodara): 36.46% breach rate, 0.2048 mean impact
 - This currently ranks second among the verified student-contributed attacks on the provided subset.
+- DeCowA (Om Singh Rawat, IIT Delhi): 32.50% breach rate, 0.1931 mean impact
+- This currently ranks third among the verified student-contributed attacks on the provided subset.
 - BPA_CNN (Om Singh Rawat, IIT Delhi): 30.21% breach rate, 0.1803 mean impact
 - This also ranks above the strongest vanilla baseline on the provided subset.
 - SIA_MI_TI (Janhavi Kishor, SRM University): 23.33% breach rate, 0.1376 mean impact
@@ -95,3 +98,5 @@ Read:
 - `results_student_attacks/bpa_cnn/README.md`
 - `results_student_attacks/bpa_cnn/bpa_cnn_vs_current_baseline_summary.csv`
 - `results_student_attacks/ops/README.md`
+- `results_student_attacks/dpa_hma/README.md`
+- `results_student_attacks/dpa_hma/dpa_hma_vs_current_baseline_summary.csv`
