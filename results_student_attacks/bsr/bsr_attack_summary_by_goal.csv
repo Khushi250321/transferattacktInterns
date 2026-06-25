@@ -1,0 +1,3 @@
+attack_type,attack_method,num_rows,breach_rate_pct,impact_mean
+dodging_attack,BSR,240,49.166666666666664,0.2663167898465569
+impersonation_attack,BSR,240,23.75,0.14328648351753753
