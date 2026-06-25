@@ -24,6 +24,7 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - `SIA_MI_TI` — Janhavi Kishor, SRM University — *Structure Invariant Transformation for better Adversarial Transferability* (ICCV 2023), adapted with MI-FGSM and TI-FGSM
 - `OPS` — Kkartik Aggarwal, Delhi Technological University (DTU) — *Boosting Adversarial Transferability through Augmentation in Hypothesis Space* (CVPR 2025)
 - `ATT_CNN` — Keshav Raj, IIIT Delhi — CNN-side ATT-inspired adaptation motivated by *ATT* (NeurIPS 2024)
+- `LI_BOOST_MI` — Charushi, IGDTUW — MI-style logarithmic-shift boosting transfer attack
 - `DPA_HMA` — Kushal Khemka, Delhi Technological University (DTU) — *Improving the Transferability of Adversarial Attacks on Face Recognition with Diverse Parameters Augmentation* (CVPR 2025)
 
 ## Current official subset baseline
@@ -38,8 +39,10 @@ This repo is intentionally a standalone vanilla transfer-attack exercise.
 - This currently ranks first among the verified student-contributed attacks on the provided subset.
 - BSR (Chirag Sharma, IIIT Vadodara): 36.46% breach rate, 0.2048 mean impact
 - This currently ranks second among the verified student-contributed attacks on the provided subset.
-- DeCowA (Om Singh Rawat, IIT Delhi): 32.50% breach rate, 0.1931 mean impact
+- LI_BOOST_MI (Charushi, IGDTUW): 35.21% breach rate, 0.2007 mean impact
 - This currently ranks third among the verified student-contributed attacks on the provided subset.
+- DeCowA (Om Singh Rawat, IIT Delhi): 32.50% breach rate, 0.1931 mean impact
+- This currently ranks fourth among the verified student-contributed attacks on the provided subset.
 - BPA_CNN (Om Singh Rawat, IIT Delhi): 30.21% breach rate, 0.1803 mean impact
 - This also ranks above the strongest vanilla baseline on the provided subset.
 - ATT_CNN (Keshav Raj, IIIT Delhi): 26.67% breach rate, 0.1646 mean impact
@@ -103,5 +106,7 @@ Read:
 - `results_student_attacks/ops/README.md`
 - `results_student_attacks/att_cnn/README.md`
 - `results_student_attacks/att_cnn/att_cnn_vs_current_baseline_summary.csv`
+- `results_student_attacks/li_boost_mi/README.md`
+- `results_student_attacks/li_boost_mi/li_boost_mi_vs_current_baseline_summary.csv`
 - `results_student_attacks/dpa_hma/README.md`
 - `results_student_attacks/dpa_hma/dpa_hma_vs_current_baseline_summary.csv`

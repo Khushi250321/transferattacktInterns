@@ -32,6 +32,7 @@ ALL_ATTACKS = [
     'SIA_MI_TI',
     'OPS',
     'ATT_CNN',
+    'LI_BOOST_MI',
     'DPA_HMA',
     'DPA_HMA_ENSEMBLE',
 ]
@@ -48,6 +49,7 @@ ATTACK_COLS = {
     'SIA_MI_TI': 'sia_mi_ti_path',
     'OPS': 'ops_path',
     'ATT_CNN': 'att_cnn_path',
+    'LI_BOOST_MI': 'li_boost_mi_path',
     'DPA_HMA': 'dpa_hma_path',
     'DPA_HMA_ENSEMBLE': 'dpa_hma_ensemble_path',
 }
@@ -63,6 +65,8 @@ OPS_BETA = 2.0
 OPS_NUM_NEIGHBOR = 10
 OPS_NUM_OPERATOR = 10
 OPS_SAMPLE_LEVELS = (2, 3, 4)
+LIBOOST_K = 6
+LIBOOST_N = 30
 DPA_HMA_SEED = int(os.environ.get('TRANSFER_ATTACK_DPA_HMA_SEED', '1'))
 DPA_HMA_NUM_ITER = int(os.environ.get('TRANSFER_ATTACK_DPA_HMA_NUM_ITER', str(NUM_ITER)))
 DPA_HMA_ENSEMBLE_NUM_ITER = int(os.environ.get('TRANSFER_ATTACK_DPA_HMA_ENSEMBLE_NUM_ITER', str(DPA_HMA_NUM_ITER)))
@@ -243,6 +247,67 @@ def att_cnn_attack(model, x, tgt_emb, attack_type):
         strong_mask = tf.abs(grad) > mean_grad
         grad = tf.where(strong_mask, grad * 0.7, grad)
 
+        grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
+        g = DECAY * g + grad
+        adv = adv + alpha * tf.sign(g)
+        adv = tf.clip_by_value(adv, x - EPSILON, x + EPSILON)
+        adv = tf.clip_by_value(adv, -1.0, 1.0)
+
+    return adv
+
+
+# Student-contributed attack integration:
+# LI_BOOST_MI by Charushi (IGDTUW)
+# This is the MI-style logarithmic-shift boosting variant verified on the
+# shared face-verification subset. The BSR hybrid variant from the student
+# branch is intentionally not included here.
+def sample_logarithmic_shifts(k, n_samples):
+    shifts = np.arange(-k, k + 1)
+    weights = np.log(k + 2) - np.log(np.abs(shifts) + 1)
+    probs = weights / np.sum(weights)
+    return np.random.choice(shifts, size=(n_samples, 2), p=probs)
+
+
+@tf.function
+def compiled_liboost_mi_step(model, adv, tgt_emb, shifts, n_samples, chunk_size, is_impersonation):
+    grad_sum = tf.zeros_like(adv)
+    for i in tf.range(0, n_samples, chunk_size):
+        chunk_shifts = shifts[i:i + chunk_size]
+        current_chunk_size = tf.shape(chunk_shifts)[0]
+        with tf.GradientTape() as tape:
+            tape.watch(adv)
+            translated_list = tf.TensorArray(dtype=tf.float32, size=current_chunk_size)
+            for n in tf.range(current_chunk_size):
+                dy = chunk_shifts[n, 0]
+                dx = chunk_shifts[n, 1]
+                rolled = tf.roll(adv, shift=[dy, dx], axis=[1, 2])
+                translated_list = translated_list.write(n, rolled[0])
+            batch_adv = translated_list.stack()
+
+            out = model(batch_adv, training=False)
+            if isinstance(out, (tuple, list)):
+                out = out[0]
+            emb = tf.nn.l2_normalize(out, axis=1)
+            tgt_rep = tf.repeat(tgt_emb, current_chunk_size, axis=0)
+            cos = tf.reduce_sum(emb * tgt_rep, axis=1)
+            loss_val = tf.reduce_mean(cos if is_impersonation else (1.0 - cos))
+            loss = loss_val * (tf.cast(current_chunk_size, tf.float32) / tf.cast(n_samples, tf.float32))
+        grad_sum += tape.gradient(loss, adv)
+    return grad_sum
+
+
+def li_boost_mi(model, x, tgt_emb, attack_type, k=LIBOOST_K, n_samples=LIBOOST_N, chunk_size=10):
+    adv = tf.identity(x)
+    g = tf.zeros_like(x)
+    alpha = EPSILON / NUM_ITER
+    tgt_emb = tf.nn.l2_normalize(tgt_emb, axis=1)
+    is_impersonation = str(attack_type).strip().lower() == 'impersonation_attack'
+
+    for _ in range(NUM_ITER):
+        shifts = tf.constant(sample_logarithmic_shifts(k, n_samples), dtype=tf.int32)
+        grad = compiled_liboost_mi_step(
+            model, adv, tgt_emb, shifts, n_samples, chunk_size, is_impersonation
+        )
         grad = grad / (tf.reduce_mean(tf.abs(grad)) + 1e-8)
         g = DECAY * g + grad
         adv = adv + alpha * tf.sign(g)
@@ -1020,6 +1085,8 @@ def run_attack(attack_name: str, model, src, tgt, attack_type: str, input_size):
         return ops_attack(model, src, tgt_emb, attack_type, input_size)
     if attack_name == 'ATT_CNN':
         return att_cnn_attack(model, src, tgt_emb, attack_type)
+    if attack_name == 'LI_BOOST_MI':
+        return li_boost_mi(model, src, tgt_emb, attack_type)
     if attack_name == 'DPA_HMA':
         return dpa_hma(model, src, tgt_emb, attack_type)
     if attack_name == 'DPA_HMA_ENSEMBLE':

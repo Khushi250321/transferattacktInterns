@@ -16,6 +16,7 @@ Student-contributed attacks now included:
 - SIA_MI_TI
 - OPS
 - ATT_CNN
+- LI_BOOST_MI
 - DPA_HMA
 
 Not included:
