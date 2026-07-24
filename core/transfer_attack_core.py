@@ -38,6 +38,7 @@ ATTACK_COLS = {
     'TI_FGSM': 'ti_fgsm_path',
     'SI_NI_FGSM': 'si_ni_fgsm_path',
     'MI_ADMIX_DI_TI': 'mi_admix_di_ti_path',
+    'VMI_FGSM': 'vmi_fgsm_path',
 }
 
 EPSILON = 0.062
@@ -333,7 +334,7 @@ def mi_admix_di_ti(model, x, tgt_emb, attack_type, pool_imgs, input_size):
 def vmi_fgsm(model, x, tgt_emb, attack_type, beta=1.5, n=20):
     """
     VMI-FGSM: Variance-tuned Momentum Iterative FGSM
-    NeurIPS 2021 - Wang et al.
+   CVPR 2021 - Wang et al.
     Key idea: use gradient variance across neighborhood to tune update direction
     """
     adv = tf.identity(x)
